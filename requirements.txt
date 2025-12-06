@@ -1,0 +1,4 @@
+rns>=0.7.0
+lxst
+pyaudio
+pydub
