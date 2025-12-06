@@ -142,7 +142,22 @@ class RadioBroadcaster:
         )
         self.destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
 
+        # Set link established callback to accept incoming listener connections
+        self.destination.set_link_established_callback(self.listener_connected)
+
         print(f"Broadcast Destination: {RNS.prettyhexrep(self.destination.hash)}")
+
+    def listener_connected(self, link):
+        """
+        Called when a listener establishes a link to the broadcaster.
+
+        Args:
+            link: The RNS.Link object for the connected listener
+        """
+        print(f"\nListener connected: {RNS.prettyhexrep(link.hash)}")
+
+        # TODO: Add listener to broadcast list
+        # TODO: Start streaming audio to this listener via LXST LinkSource
 
     def setup_lxst(self):
         """Initialize LXST audio pipeline for streaming."""

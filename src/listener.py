@@ -96,24 +96,50 @@ class RadioListener:
 
         try:
             # Convert hash string to bytes (remove any spaces or formatting)
-            destination_hash = bytes.fromhex(station_hash.replace(" ", "").replace(":", ""))
+            destination_hash = bytes.fromhex(station_hash.replace(" ", "").replace(":", "").replace("<", "").replace(">", ""))
 
-            # Create destination from hash
-            # Note: For broadcasts, we don't establish a link, we just listen for packets
-            # However, LXST currently uses Link-based communication
-            # So we need to request a link to the broadcaster
+            # First, check if we have a path to this destination
+            if not RNS.Transport.has_path(destination_hash):
+                print("No path to station, requesting path...")
+                RNS.Transport.request_path(destination_hash)
+
+                # Wait for path to be discovered
+                path_timeout = time.time() + 30
+                while not RNS.Transport.has_path(destination_hash):
+                    time.sleep(0.5)
+                    if time.time() > path_timeout:
+                        print("Could not find path to station!")
+                        print("Make sure the broadcaster is running and announcing.")
+                        return
+
+                print("Path discovered!")
+            else:
+                print("Found existing path to station")
+
+            # Create a temporary destination object to establish link
+            # Use our identity to create an outbound destination
+            temp_dest = RNS.Destination(
+                self.identity,
+                RNS.Destination.OUT,
+                RNS.Destination.SINGLE,
+                APP_NAME,
+                BROADCAST_ASPECT
+            )
+            # Override the hash to point to the remote broadcaster
+            temp_dest.hash = destination_hash
+            temp_dest.hexhash = destination_hash.hex()
 
             print("Establishing link to broadcaster...")
 
             # Create link to broadcaster destination
-            self.link = RNS.Link(destination_hash)
+            self.link = RNS.Link(temp_dest)
 
             # Wait for link to establish
-            timeout = time.time() + 10
-            while not self.link.status == RNS.Link.ACTIVE:
+            timeout = time.time() + 15
+            while self.link.status != RNS.Link.ACTIVE:
                 time.sleep(0.1)
                 if time.time() > timeout:
-                    print("Link establishment timed out!")
+                    print(f"Link establishment timed out! Status: {self.link.status}")
                     return
 
             print("Link established!")
