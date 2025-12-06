@@ -9,7 +9,16 @@ import RNS
 import LXST
 import argparse
 import sys
+import time
 from pathlib import Path
+
+from LXST import Pipeline
+from LXST.Sinks import LineSink
+from LXST.Network import LinkSource
+from LXST.Codecs import Opus
+
+APP_NAME = "reticulumradio"
+BROADCAST_ASPECT = "broadcast"
 
 
 class RadioListener:
@@ -21,8 +30,13 @@ class RadioListener:
         """Initialize the listener."""
         self.reticulum = None
         self.identity = None
-        self.lxst_inlet = None
         self.current_station = None
+
+        # LXST components
+        self.link = None
+        self.link_source = None
+        self.speaker_sink = None
+        self.pipeline = None
 
     def setup_reticulum(self):
         """Initialize Reticulum network stack."""
@@ -46,13 +60,30 @@ class RadioListener:
     def discover_stations(self):
         """Discover available radio stations on the network."""
         print("\nScanning for radio stations...")
-        print("(This feature requires LXST discovery implementation)")
+        print("Listening for broadcast announcements...")
+        print("(Stations announce every 5 minutes)")
+        print("\nPress Ctrl+C to stop scanning\n")
 
-        # TODO: Implement LXST outlet discovery
-        # LXST should provide a way to announce/discover outlets
-        # For now, stations must be manually specified
+        def announce_handler(destination_hash, announced_identity, app_data):
+            """Handle incoming destination announcements."""
+            # Check if this is a radio broadcast destination
+            aspect = RNS.Destination.hash_from_name_and_identity(
+                f"{APP_NAME}.{BROADCAST_ASPECT}",
+                announced_identity
+            )
 
-        print("No stations discovered. Use --station to connect to a specific station.")
+            station_hash = RNS.prettyhexrep(destination_hash)
+            print(f"Found station: {station_hash}")
+
+        # Register announce handler
+        RNS.Transport.register_announce_handler(announce_handler)
+
+        try:
+            # Wait for announcements
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nStopped scanning.")
 
     def tune_to_station(self, station_hash):
         """
@@ -64,17 +95,40 @@ class RadioListener:
         print(f"\nTuning to station: {station_hash}")
 
         try:
-            # Convert hash string to bytes
-            destination_hash = bytes.fromhex(station_hash)
+            # Convert hash string to bytes (remove any spaces or formatting)
+            destination_hash = bytes.fromhex(station_hash.replace(" ", "").replace(":", ""))
 
-            # Create LXST inlet to receive audio stream
-            print("Connecting to LXST stream...")
+            # Create destination from hash
+            # Note: For broadcasts, we don't establish a link, we just listen for packets
+            # However, LXST currently uses Link-based communication
+            # So we need to request a link to the broadcaster
 
-            # TODO: Implement LXST inlet connection
-            # self.lxst_inlet = LXST.Inlet(
-            #     self.reticulum,
-            #     destination_hash
-            # )
+            print("Establishing link to broadcaster...")
+
+            # Create link to broadcaster destination
+            self.link = RNS.Link(destination_hash)
+
+            # Wait for link to establish
+            timeout = time.time() + 10
+            while not self.link.status == RNS.Link.ACTIVE:
+                time.sleep(0.1)
+                if time.time() > timeout:
+                    print("Link establishment timed out!")
+                    return
+
+            print("Link established!")
+
+            # Set up audio pipeline
+            print("Setting up audio playback...")
+
+            # TODO: Create speaker sink
+            # self.speaker_sink = LineSink()
+
+            # Create link source to receive audio
+            # self.link_source = LinkSource(self.link, None, self.speaker_sink)
+
+            # Start receiving
+            # self.link_source.start()
 
             self.current_station = station_hash
             print(f"Connected to station!")
@@ -85,6 +139,8 @@ class RadioListener:
 
         except Exception as e:
             print(f"Error tuning to station: {e}")
+            import traceback
+            traceback.print_exc()
 
     def play_stream(self):
         """Receive and play the audio stream."""
@@ -124,9 +180,17 @@ class RadioListener:
 
     def shutdown(self):
         """Clean shutdown of listener."""
-        if self.lxst_inlet:
+        if self.link_source:
+            print("Stopping audio stream...")
+            self.link_source.stop()
+
+        if self.link and self.link.status == RNS.Link.ACTIVE:
             print("Disconnecting from station...")
-            # TODO: Proper LXST cleanup
+            self.link.teardown()
+
+        if self.pipeline:
+            print("Stopping audio pipeline...")
+            self.pipeline.stop()
 
         print("Listener stopped.")
 

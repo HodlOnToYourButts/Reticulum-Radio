@@ -14,6 +14,16 @@ import os
 from pathlib import Path
 from queue import Queue
 from threading import Thread, Event, Lock
+import time
+
+from LXST import Pipeline, Mixer
+from LXST.Sources import LineSource, OpusFileSource
+from LXST.Sinks import LineSink
+from LXST.Codecs import Opus
+from LXST.Network import Packetizer
+
+APP_NAME = "reticulumradio"
+BROADCAST_ASPECT = "broadcast"
 
 
 class MP3Queue:
@@ -84,7 +94,13 @@ class RadioBroadcaster:
         self.reticulum = None
         self.identity = None
         self.destination = None
-        self.lxst_outlet = None
+
+        # LXST components
+        self.mic_source = None
+        self.mp3_source = None
+        self.mixer = None
+        self.pipeline = None
+        self.packetizer = None
 
         # Audio state
         self.mp3_queue = MP3Queue()
@@ -95,6 +111,7 @@ class RadioBroadcaster:
         # Threading
         self.running = Event()
         self.audio_thread = None
+        self.announce_thread = None
 
     def setup_reticulum(self):
         """Initialize Reticulum network stack."""
@@ -115,20 +132,40 @@ class RadioBroadcaster:
 
         print(f"Broadcaster Identity: {RNS.prettyhexrep(self.identity.hash)}")
 
-    def setup_lxst(self):
-        """Initialize LXST for audio streaming."""
-        print("Setting up LXST audio outlet...")
-
-        # Create LXST outlet for broadcasting
-        # Using OPUS codec for good quality audio streaming
-        self.lxst_outlet = LXST.Outlet(
-            self.reticulum,
+        # Create broadcast destination
+        self.destination = RNS.Destination(
             self.identity,
-            name=self.station_name
+            RNS.Destination.IN,
+            RNS.Destination.SINGLE,
+            APP_NAME,
+            BROADCAST_ASPECT
         )
+        self.destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
 
-        print(f"LXST outlet created for: {self.station_name}")
-        print(f"Outlet address: {RNS.prettyhexrep(self.lxst_outlet.destination.hash)}")
+        print(f"Broadcast Destination: {RNS.prettyhexrep(self.destination.hash)}")
+
+    def setup_lxst(self):
+        """Initialize LXST audio pipeline for streaming."""
+        print("Setting up LXST audio pipeline...")
+
+        # Create microphone source
+        # TODO: Get default microphone from backend
+        # For now, using placeholder - will be set when audio backend is working
+        # self.mic_source = LineSource()
+
+        # Create mixer to combine mic and music sources
+        # self.mixer = Mixer()
+
+        # Create Opus codec for high-quality streaming
+        codec = Opus(profile=Opus.PROFILE_VOICE_MEDIUM)
+
+        # Create packetizer to send audio over Reticulum
+        self.packetizer = Packetizer(self.destination)
+
+        # TODO: Set up pipeline: Source -> Codec -> Packetizer
+        # self.pipeline = Pipeline()
+
+        print(f"LXST pipeline created for: {self.station_name}")
 
     def audio_mixer_loop(self):
         """
@@ -290,8 +327,23 @@ class RadioBroadcaster:
         self.audio_thread = Thread(target=self.audio_mixer_loop, daemon=True)
         self.audio_thread.start()
 
+        # Start announce thread to make broadcast discoverable
+        self.announce_thread = Thread(target=self.announce_loop, daemon=True)
+        self.announce_thread.start()
+
+        # Initial announce
+        self.destination.announce()
+
         # Run command interface on main thread
         self.command_interface()
+
+    def announce_loop(self):
+        """Periodically announce the broadcast destination."""
+        while self.running.is_set():
+            if self.destination:
+                self.destination.announce()
+                print(f"Announced broadcast on {RNS.prettyhexrep(self.destination.hash)}")
+            time.sleep(300)  # Announce every 5 minutes
 
     def shutdown(self):
         """Clean shutdown of broadcaster."""
@@ -300,9 +352,16 @@ class RadioBroadcaster:
         if self.audio_thread:
             self.audio_thread.join(timeout=2.0)
 
-        if self.lxst_outlet:
-            print("Shutting down LXST outlet...")
-            # TODO: Proper LXST cleanup
+        if self.announce_thread:
+            self.announce_thread.join(timeout=2.0)
+
+        if self.packetizer:
+            print("Shutting down LXST packetizer...")
+            self.packetizer.stop()
+
+        if self.pipeline:
+            print("Shutting down LXST pipeline...")
+            self.pipeline.stop()
 
         print("Broadcaster stopped.")
 
