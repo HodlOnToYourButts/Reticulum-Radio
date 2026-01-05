@@ -281,32 +281,32 @@ class TermuxListener:
         # Close control link (only needed it for station info)
         link.teardown()
 
+        # Now setup decoder and broadcast listener (moved outside callback to avoid timeout issues)
+        print("\n" + "=" * 70)
+        print("STATION INFORMATION")
+        print("=" * 70)
+        print(f"Station: {self.station_name}")
+
+        if hasattr(self, 'streams'):
+            print(f"Streams available: {len(self.streams)}")
+            for quality, stream_info in self.streams.items():
+                print(f"  - {quality}: {stream_info.get('codec', 'unknown')} - {stream_info.get('quality', '')}")
+
+        print("=" * 70)
+        print()
+
+        # Setup decoder (this may download model checkpoints on first run)
+        self.setup_decoder()
+        self.setup_broadcast_listener()
+
         return True
 
     def handle_station_info(self, response):
         """Handle station info response."""
         try:
-
-            # Save station name for destination creation
+            # Save station name and streams for destination creation
             self.station_name = response.get('station_name', 'Unknown')
-
-            print("\n" + "=" * 70)
-            print("STATION INFORMATION")
-            print("=" * 70)
-            print(f"Station: {self.station_name}")
-
-            streams = response.get('streams', {})
-            print(f"Streams available: {len(streams)}")
-
-            for quality, stream_info in streams.items():
-                print(f"  - {quality}: {stream_info.get('codec', 'unknown')} - {stream_info.get('quality', '')}")
-
-            print("=" * 70)
-            print()
-
-            # We'll use 'low' quality (EnCodec)
-            self.setup_decoder()
-            self.setup_broadcast_listener()
+            self.streams = response.get('streams', {})
 
         except Exception as e:
             print(f"Error handling station info: {e}")
