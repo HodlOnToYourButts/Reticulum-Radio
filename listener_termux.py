@@ -154,6 +154,7 @@ class TermuxListener:
         self.player = None
         self.broadcaster_identity = None
         self.broadcast_destination = None
+        self.station_name = None  # Full station name from broadcaster
 
         # Statistics
         self.packets_received = 0
@@ -263,10 +264,13 @@ class TermuxListener:
         try:
             response = umsgpack.unpackb(request_receipt.response)
 
+            # Save station name for destination creation
+            self.station_name = response.get('station_name', 'Unknown')
+
             print("\n" + "=" * 70)
             print("STATION INFORMATION")
             print("=" * 70)
-            print(f"Station: {response.get('station_name', 'Unknown')}")
+            print(f"Station: {self.station_name}")
             print(f"Streams available: {len(response.get('streams', []))}")
 
             for stream in response.get('streams', []):
@@ -304,17 +308,22 @@ class TermuxListener:
         print("Setting up broadcast listener...")
 
         # Create PLAIN destination for broadcast reception
+        # Must match broadcaster's destination exactly: APP_NAME/broadcast/<station_name>/low
         self.broadcast_destination = RNS.Destination(
             None,
             RNS.Destination.IN,
             RNS.Destination.PLAIN,
             APP_NAME,
             "broadcast",
+            self.station_name,  # Full station name from broadcaster
             "low"  # Quality level
         )
 
         # Set packet callback
         self.broadcast_destination.set_packet_callback(self.packet_callback)
+
+        print(f"✓ Listening on: {APP_NAME}/broadcast/{self.station_name}/low")
+        print(f"✓ Destination hash: {RNS.prettyhexrep(self.broadcast_destination.hash)}")
 
         # Create audio player
         self.player = AudioPlayer(
