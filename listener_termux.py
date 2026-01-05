@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).parent / 'src'))
 from encodec_codec_termux import EnCodecStreamable
 
 # Constants
-APP_NAME = "reticulum_radio"
+APP_NAME = "reticulumradio"
 
 
 class AudioPlayer:
