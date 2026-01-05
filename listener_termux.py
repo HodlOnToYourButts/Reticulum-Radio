@@ -168,25 +168,26 @@ class TermuxListener:
         print("Initializing Reticulum...")
         print("=" * 70)
 
-        # Create Reticulum instance
-        # Note: Cannot run simultaneously with Sideband (both bind to same network interfaces)
+        # Try to connect to existing shared instance (e.g., Sideband)
+        # If that fails, create a standalone instance
         try:
-            self.reticulum = RNS.Reticulum()
-            print("✓ Reticulum initialized")
-        except OSError as e:
-            if "Address already in use" in str(e):
-                print("\n" + "!" * 70)
-                print("ERROR: Another Reticulum instance is already running!")
-                print("!" * 70)
-                print("\nThis is likely Sideband or another RNS application.")
-                print("\nTo use this listener, you must:")
-                print("  1. Close Sideband (and any other RNS apps)")
-                print("  2. Then run this listener")
-                print("\nAlternatively, integrate this listener into Sideband itself.")
-                print("!" * 70 + "\n")
-                sys.exit(1)
-            else:
-                raise
+            self.reticulum = RNS.Reticulum(require_shared_instance=True)
+            print("✓ Connected to shared Reticulum instance (Sideband daemon)")
+        except Exception as e:
+            print(f"No shared instance found, creating standalone instance...")
+            print(f"  (This means Sideband is not running)")
+            try:
+                self.reticulum = RNS.Reticulum()
+                print("✓ Standalone Reticulum initialized")
+            except OSError as e:
+                if "Address already in use" in str(e):
+                    print("\n" + "!" * 70)
+                    print("ERROR: Port conflict - another RNS instance is running")
+                    print("but not available as shared instance!")
+                    print("!" * 70 + "\n")
+                    sys.exit(1)
+                else:
+                    raise
 
         # Load or create identity
         identity_path = Path.home() / ".reticulum" / "identities" / "radio_listener"
