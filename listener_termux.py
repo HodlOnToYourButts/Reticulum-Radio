@@ -168,13 +168,15 @@ class TermuxListener:
         print("Initializing Reticulum...")
         print("=" * 70)
 
-        # Connect to existing Reticulum instance (e.g., Sideband's daemon)
-        # If no shared instance exists, create a new one
+        # Try to connect to existing Reticulum instance (e.g., Sideband's daemon)
+        # If no shared instance exists, create a standalone one
         try:
             self.reticulum = RNS.Reticulum(shared_instance=True)
-            print("Connected to existing Reticulum instance (e.g., Sideband)")
-        except Exception as e:
-            print(f"No shared instance found, creating new one: {e}")
+            print("✓ Connected to existing Reticulum instance (Sideband daemon)")
+            print("  Note: If you stop Sideband, this listener will also stop working")
+        except Exception:
+            print("No shared instance found, creating standalone instance...")
+            print("  Note: You won't be able to start Sideband while this is running")
             self.reticulum = RNS.Reticulum()
 
         # Load or create identity
