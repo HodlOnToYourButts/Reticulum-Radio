@@ -219,9 +219,28 @@ class TermuxListener:
         print("✓ Path found")
 
         # Get broadcaster identity
+        # The announce contains the identity. Wait a bit for it to be received.
+        print("Recalling broadcaster identity...")
         self.broadcaster_identity = RNS.Identity.recall(dest_hash_bytes)
+
+        # If identity not immediately available, wait for announce
+        if not self.broadcaster_identity:
+            print("Identity not in cache, waiting for announce...")
+            wait_time = 0
+            max_wait = 15  # Wait up to 15 seconds for announce
+
+            while not self.broadcaster_identity and wait_time < max_wait:
+                time.sleep(1)
+                wait_time += 1
+                self.broadcaster_identity = RNS.Identity.recall(dest_hash_bytes)
+
+                if wait_time % 5 == 0 and not self.broadcaster_identity:
+                    print(f"Still waiting for announce... ({wait_time}s)")
+
         if not self.broadcaster_identity:
             print("ERROR: Could not recall broadcaster identity")
+            print("  The broadcaster may not have announced yet")
+            print("  Try restarting the broadcaster, then the listener")
             return False
 
         print(f"✓ Broadcaster identity: {RNS.prettyhexrep(self.broadcaster_identity.hash)}")
