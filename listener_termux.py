@@ -31,8 +31,8 @@ import sounddevice as sd
 # Add src directory to path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
-# Import our codec
-from encodec_codec_streamable import EnCodecStreamable
+# Import our codec (Termux version - no LXST dependency)
+from encodec_codec_termux import EnCodecStreamable
 
 # Constants
 APP_NAME = "reticulum_radio"
