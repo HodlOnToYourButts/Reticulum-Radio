@@ -244,25 +244,42 @@ class TermuxListener:
 
         print("✓ Link established")
 
-        # Request station info
+        # Set up response handler BEFORE sending request
         print("Requesting station information...")
-        request_data = umsgpack.packb({"type": "get_station_info"})
-        link.request(
-            "/station_info",
-            request_data,
-            response_callback=self.handle_station_info,
-            failed_callback=lambda: print("ERROR: Station info request failed")
-        )
+        self.station_info_received = False
+
+        def response_callback(message, packet):
+            response = umsgpack.unpackb(message)
+            self.handle_station_info(response)
+            self.station_info_received = True
+
+        link.set_packet_callback(response_callback)
+
+        # Send request
+        request = {"type": "get_info"}
+        request_data = umsgpack.packb(request)
+        packet = RNS.Packet(link, request_data)
+        packet.send()
 
         # Wait for response
-        time.sleep(2)
+        timeout = 10
+        start = time.time()
+        while not self.station_info_received and time.time() - start < timeout:
+            time.sleep(0.1)
+
+        if not self.station_info_received:
+            print("ERROR: Timeout waiting for station info")
+            link.teardown()
+            return False
+
+        # Close control link (only needed it for station info)
+        link.teardown()
 
         return True
 
-    def handle_station_info(self, request_receipt):
+    def handle_station_info(self, response):
         """Handle station info response."""
         try:
-            response = umsgpack.unpackb(request_receipt.response)
 
             # Save station name for destination creation
             self.station_name = response.get('station_name', 'Unknown')
