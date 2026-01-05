@@ -168,16 +168,25 @@ class TermuxListener:
         print("Initializing Reticulum...")
         print("=" * 70)
 
-        # Try to connect to existing Reticulum instance (e.g., Sideband's daemon)
-        # If no shared instance exists, create a standalone one
+        # Create Reticulum instance
+        # Note: Cannot run simultaneously with Sideband (both bind to same network interfaces)
         try:
-            self.reticulum = RNS.Reticulum(shared_instance=True)
-            print("✓ Connected to existing Reticulum instance (Sideband daemon)")
-            print("  Note: If you stop Sideband, this listener will also stop working")
-        except Exception:
-            print("No shared instance found, creating standalone instance...")
-            print("  Note: You won't be able to start Sideband while this is running")
             self.reticulum = RNS.Reticulum()
+            print("✓ Reticulum initialized")
+        except OSError as e:
+            if "Address already in use" in str(e):
+                print("\n" + "!" * 70)
+                print("ERROR: Another Reticulum instance is already running!")
+                print("!" * 70)
+                print("\nThis is likely Sideband or another RNS application.")
+                print("\nTo use this listener, you must:")
+                print("  1. Close Sideband (and any other RNS apps)")
+                print("  2. Then run this listener")
+                print("\nAlternatively, integrate this listener into Sideband itself.")
+                print("!" * 70 + "\n")
+                sys.exit(1)
+            else:
+                raise
 
         # Load or create identity
         identity_path = Path.home() / ".reticulum" / "identities" / "radio_listener"
