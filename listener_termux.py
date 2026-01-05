@@ -294,10 +294,12 @@ class TermuxListener:
             print("STATION INFORMATION")
             print("=" * 70)
             print(f"Station: {self.station_name}")
-            print(f"Streams available: {len(response.get('streams', []))}")
 
-            for stream in response.get('streams', []):
-                print(f"  - {stream['name']}: {stream['codec']}")
+            streams = response.get('streams', {})
+            print(f"Streams available: {len(streams)}")
+
+            for quality, stream_info in streams.items():
+                print(f"  - {quality}: {stream_info.get('codec', 'unknown')} - {stream_info.get('quality', '')}")
 
             print("=" * 70)
             print()
